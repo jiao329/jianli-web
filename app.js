@@ -1,5 +1,6 @@
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
+import { createApp, h, nextTick, ref, watch } from 'vue';
 
 const STORAGE_KEY = 'resume-studio-data';
 const uid = (prefix = 'm') => `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -50,6 +51,7 @@ let previewZoom = 100;
 let modalSnapshot = null;
 let modalTarget = null;
 let selectedElement = 'name';
+const vueMarkup = ref('');
 function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
 function toast(message) { const node = $('#toast'); if (!node) return; node.textContent = message; node.classList.add('show'); clearTimeout(window.__toast); window.__toast = setTimeout(() => node.classList.remove('show'), 1700); }
 function getModule(id) { return state.modules.find(module => module.id === id); }
@@ -94,7 +96,7 @@ function resume() { const p = state.profile; const leftRight = state.settings.te
 function renderSkillList(value) { const items = String(value || '').split(/[,，\\n]+/).map(item => item.trim()).filter(Boolean); return items.map(item => `<span class="skill-bullet">${esc(item)}</span>`).join(''); }
 function renderModule(module) { const style = `style="--module-space:${module.spacing}px"`; const leftRight = state.settings.template === 'left-right'; let body = ''; if (module.type === 'summary' || module.type === 'custom') body = `<p class="summary">${esc(module.content)}</p>`; if (module.type === 'skills') body = leftRight ? `<div class="skill-list">${renderSkillList(module.skills)}</div>` : `<p class="skill-line">${esc(module.skills)}</p>`; if (module.type === 'experience') body = (module.items || []).map(item => leftRight ? `<div class="exp-item"><div class="exp-row left-right-item-row"><strong>${esc(item.role)}</strong><span class="exp-company">${esc(item.company)}</span><span class="exp-date">${esc(item.period)}</span></div><p class="exp-detail">${esc(item.detail)}</p></div>` : `<div class="exp-item"><div class="exp-row"><strong>${esc(item.role)}</strong><span class="exp-date">${esc(item.period)}</span></div><div class="exp-company">${esc(item.company)}</div><p class="exp-detail">${esc(item.detail)}</p></div>`).join(''); if (module.type === 'education') body = (module.items || []).map(item => `<div class="edu-row"><div class="edu-main"><strong>${esc(item.school)}</strong><p>${esc(item.degree)} · ${esc(item.city)}</p></div><span class="exp-date">${esc(item.period)}</span></div>`).join(''); if (module.type === 'projects') body = (module.items || []).map(item => leftRight ? `<div class="project-item"><div class="exp-row left-right-item-row"><strong>${esc(item.name)}</strong><span class="exp-company">${esc(item.role)}</span><span class="exp-date">${esc(item.period)}</span></div><p class="exp-detail">${esc(item.detail)}</p></div>` : `<div class="project-item"><div class="exp-row"><strong>${esc(item.name)}</strong><span class="exp-date">${esc(item.period)}</span></div><div class="exp-company">${esc(item.role)}</div><p class="exp-detail">${esc(item.detail)}</p></div>`).join(''); if (module.type === 'awards') body = (module.items || []).map(item => `<div class="edu-row"><div class="edu-main"><strong>${esc(item.name)}</strong><p>${esc(item.issuer)} · ${esc(item.detail)}</p></div><span class="exp-date">${esc(item.period)}</span></div>`).join(''); if (module.type === 'languages') body = `<div class="language-list">${(module.items || []).map(item => `<span><b>${esc(item.name)}</b>${esc(item.level)}</span>`).join('')}</div>`; return `<section class="resume-section type-${module.type}" ${style}><h3>${esc(module.title)}</h3>${body}</section>`; }
 function bindPreviewSelection() { $$('[data-element-id]').forEach(element => { element.onclick = event => { event.preventDefault(); event.stopPropagation(); selectedElement = element.dataset.elementId; $$('.paper [data-element-id]').forEach(item => item.classList.toggle('is-selected', item === element)); toast(`已选中${({ name: '姓名', role: '职位', contact: '联系方式', header: '表头整体' })[selectedElement] || '元素'}，可在“间距”中调整`); }; }); }
-function render(rebuild = true) { if (rebuild) { $('#app').innerHTML = shell(); bind(); } else { const paper = $('#paper'); if (paper) { paper.className = `paper ${state.settings.template}`; paper.innerHTML = resume(); bindPreviewSelection(); } } applyVisualSettings(); updateProgress(); }
+function render(rebuild = true) { if (rebuild) { vueMarkup.value = shell(); nextTick(() => bind()); } else { const paper = $('#paper'); if (paper) { paper.className = `paper ${state.settings.template}`; paper.innerHTML = resume(); bindPreviewSelection(); } } applyVisualSettings(); updateProgress(); }
 function applyVisualSettings() { const fontMap = { system: 'Inter, "SF Pro Display", "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif', serif: 'Georgia, "Songti SC", "SimSun", serif', mono: '"SFMono-Regular", Consolas, "Liberation Mono", monospace' }; document.documentElement.style.setProperty('--accent', state.settings.accent); document.documentElement.style.setProperty('--page-padding', `${state.settings.pagePadding}px`); document.documentElement.style.setProperty('--font-size', `${state.settings.fontSize}px`); document.documentElement.style.setProperty('--line-height', state.settings.lineHeight); document.documentElement.style.setProperty('--paper-radius', `${state.settings.paperRadius}px`); document.documentElement.style.setProperty('--module-gap', `${state.settings.moduleGap}px`); document.documentElement.style.setProperty('--resume-font', fontMap[state.settings.font] || fontMap.system); const paper = $('#paper'); if (paper) { paper.dataset.rule = state.settings.sectionRule; paper.style.transform = `scale(${previewZoom / 100})`; paper.style.marginBottom = `${(1 - previewZoom / 100) * -1123}px`; $('#ztext').textContent = `${previewZoom}%`; } }
 function updateProgress() { const count = [state.profile.name, state.profile.role, ...activeModules().map(module => module.type === 'summary' ? module.content : module.type === 'skills' ? module.skills : module.items?.length ? 'yes' : '')].filter(Boolean).length; const progress = $('#progress'); if (progress) progress.textContent = `${Math.min(100, Math.round(count / (state.modules.length + 2) * 100))}%`; }
 function setPath(path, value) { const parts = path.split('.'); if (parts[0] === 'module') { const module = getModule(parts[1]); if (!module) return; let target = module; parts.slice(2, -1).forEach(key => { target = target[key]; }); target[parts.at(-1)] = value; } else { let target = state; parts.slice(0, -1).forEach(key => { target = target[key]; }); target[parts.at(-1)] = value; } save(); }
@@ -171,4 +173,17 @@ async function exportImage() { try { toast('正在生成图片'); const canvas =
 async function exportPdf() { try { toast('正在生成 PDF'); const canvas = await captureResumeCanvas(); const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4', compress: true }); pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, 210, 297, undefined, 'FAST'); pdf.save(`简历-${safeFilename(state.profile.name)}.pdf`); toast('PDF 已下载'); } catch (error) { console.error(error); toast('PDF 导出失败，请重试'); } }
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('preview-mode')) togglePreview(false); });
 document.addEventListener('keydown', event => { if (event.key === 'Escape' && document.body.classList.contains('modal-open')) closeModal(true); });
-render();
+
+// Vue owns the application shell and re-renders it when the editor requests a
+// full rebuild. Existing panel behavior is kept in the core until each panel is
+// migrated into a dedicated Vue component.
+const VueShell = {
+  setup() {
+    vueMarkup.value = shell();
+    watch(vueMarkup, () => nextTick(() => bind()));
+    nextTick(() => { bind(); applyVisualSettings(); updateProgress(); });
+    return () => h('div', { innerHTML: vueMarkup.value });
+  },
+};
+
+createApp(VueShell).mount('#app');

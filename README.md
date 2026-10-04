@@ -25,4 +25,3 @@ python -m http.server 4173
 ## 在线地址
 
 - 部署预览：https://jianli-web.pages.dev/
-- GitHub：https://github.com/jiao329/jianli-web

@@ -2,3 +2,9 @@ node_modules/
 dist/
 *.log
 .env*
+
+.reference/
+.reference_download.py
+edge-verify/
+template-reference.png
+left-right-check.png
